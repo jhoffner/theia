@@ -19,6 +19,7 @@ import { DiffUris } from '@theia/core/lib/browser/diff-uris';
 import { OpenerService, open, StatefulWidget, SELECTED_CLASS, WidgetManager, ApplicationShell, Message } from '@theia/core/lib/browser';
 import { GIT_RESOURCE_SCHEME } from '../git-resource';
 import URI from '@theia/core/lib/common/uri';
+import { CancellationTokenSource } from '@theia/core/lib/common/cancellation';
 import { GIT_HISTORY, GIT_HISTORY_MAX_COUNT } from './git-history-contribution';
 import { GitFileStatus, Git, GitFileChange } from '../../common';
 import { FileSystem } from '@theia/filesystem/lib/common';
@@ -51,6 +52,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
     protected commits: GitCommitNode[];
     protected ready: boolean;
     protected singleFileMode: boolean;
+    private cancelIndicator = new CancellationTokenSource();
 
     constructor(
         @inject(OpenerService) protected readonly openerService: OpenerService,
@@ -83,7 +85,8 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
                         range: {
                             toRevision: this.commits[this.commits.length - 1].commitSha
                         },
-                        maxCount: GIT_HISTORY_MAX_COUNT
+                        maxCount: GIT_HISTORY_MAX_COUNT,
+                        uri: this.options.uri
                     });
                 }
             };
@@ -96,6 +99,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
 
     async setContent(options?: Git.Options.Log) {
         this.options = options || {};
+        this.commits = [];
         this.ready = false;
         if (options && options.uri) {
             const fileStat = await this.fileSystem.getFileStat(options.uri);
@@ -107,10 +111,15 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
 
     protected addCommits(options?: Git.Options.Log) {
         const repository = this.repositoryProvider.selectedRepository;
+        this.cancelIndicator.cancel();
+        this.cancelIndicator = new CancellationTokenSource();
+        const token = this.cancelIndicator.token;
         if (repository) {
             const log = this.git.log(repository, options);
             log.then(async changes => {
-                this.commits = [];
+                if (token.isCancellationRequested) {
+                    return;
+                }
                 if (this.commits.length > 0) {
                     changes = changes.slice(1);
                 }
