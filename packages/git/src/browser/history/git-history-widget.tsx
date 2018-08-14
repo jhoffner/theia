@@ -16,11 +16,11 @@
 
 import { injectable, inject } from 'inversify';
 import { DiffUris } from '@theia/core/lib/browser/diff-uris';
-import { OpenerService, open, StatefulWidget, SELECTED_CLASS, WidgetManager, ApplicationShell, Message } from '@theia/core/lib/browser';
+import { OpenerService, open, StatefulWidget, SELECTED_CLASS, WidgetManager, ApplicationShell } from '@theia/core/lib/browser';
 import { GIT_RESOURCE_SCHEME } from '../git-resource';
 import URI from '@theia/core/lib/common/uri';
 import { CancellationTokenSource } from '@theia/core/lib/common/cancellation';
-import { GIT_HISTORY, GIT_HISTORY_MAX_COUNT } from './git-history-contribution';
+import { GIT_HISTORY } from './git-history-contribution';
 import { GitFileStatus, Git, GitFileChange } from '../../common';
 import { FileSystem } from '@theia/filesystem/lib/common';
 import { GitDiffContribution } from '../diff/git-diff-contribution';
@@ -29,8 +29,8 @@ import { GitCommitDetailUri, GitCommitDetailOpenerOptions, GitCommitDetailOpenHa
 import { GitCommitDetails } from './git-commit-detail-widget';
 import { GitNavigableListWidget } from '../git-navigable-list-widget';
 import { GitFileChangeNode } from '../git-widget';
-import { Disposable } from 'vscode-jsonrpc';
 import * as React from 'react';
+import { AutoSizer, List, ListRowRenderer } from 'react-virtualized';
 
 export interface GitCommitNode extends GitCommitDetails {
     fileChanges?: GitFileChange[];
@@ -53,6 +53,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
     protected ready: boolean;
     protected singleFileMode: boolean;
     private cancelIndicator = new CancellationTokenSource();
+    protected list: List | undefined;
 
     constructor(
         @inject(OpenerService) protected readonly openerService: OpenerService,
@@ -70,31 +71,42 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         this.addClass('theia-git');
         this.options = {};
         this.commits = [];
+        this.scrollOptions = undefined;
     }
 
+    /*
     protected onAfterAttach(msg: Message) {
-        super.onAfterAttach(msg);
-        (async () => {
-            const sc = await this.getScrollContainer();
-            const listener = (e: UIEvent) => {
-                const el = (e.srcElement || e.target) as HTMLElement;
-                if (el.scrollTop + el.clientHeight > el.scrollHeight - 83) {
-                    const ll = this.node.getElementsByClassName('history-lazy-loading')[0];
-                    ll.className = 'history-lazy-loading show';
-                    this.addCommits({
-                        range: {
-                            toRevision: this.commits[this.commits.length - 1].commitSha
-                        },
-                        maxCount: GIT_HISTORY_MAX_COUNT,
-                        uri: this.options.uri
-                    });
-                }
-            };
-            sc.addEventListener('scroll', listener);
-            this.toDispose.push(Disposable.create(() => {
-                sc.removeEventListener('scroll', listener);
-            }));
-        })();
+    super.onAfterAttach(msg);
+    (async () => {
+        const sc = await this.getScrollContainer();
+        const listener = (e: UIEvent) => {
+            const el = (e.srcElement || e.target) as HTMLElement;
+            if (el.scrollTop + el.clientHeight > el.scrollHeight - 83) {
+                const ll = this.node.getElementsByClassName('history-lazy-loading')[0];
+                ll.className = 'history-lazy-loading show';
+                this.addCommits({
+                    range: {
+                        toRevision: this.commits[this.commits.length - 1].commitSha
+                    },
+                    maxCount: GIT_HISTORY_MAX_COUNT,
+                    uri: this.options.uri
+                });
+            }
+        };
+        sc.addEventListener('scroll', listener);
+        this.toDispose.push(Disposable.create(() => {
+            sc.removeEventListener('scroll', listener);
+        }));
+    })();
+    }
+    */
+
+    update() {
+        this.gitNodes = [];
+        if (this.list) {
+            this.list.forceUpdateGrid();
+        }
+        super.update();
     }
 
     async setContent(options?: Git.Options.Log) {
@@ -198,7 +210,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
     }
 
     protected render(): React.ReactNode {
-        this.gitNodes = [];
+        console.log('render', this.gitNodes);
         return <div className='git-diff-container'>
             {
                 this.ready ?
@@ -240,20 +252,36 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         }
     }
 
-    protected renderCommitList(): React.ReactNode {
-        const theList: React.ReactNode[] = [];
+    protected renderCommitRow: ListRowRenderer = ({ index, key, style }) => {
+        const commit = this.commits[index];
+        const head = this.renderCommit(commit);
+        const body = commit.expanded ? this.renderFileChangeList(commit) : '';
+        return <div key={key} style={style} className='commitListElement'>{head}{body}</div>;
+    }
 
-        for (const commit of this.commits) {
-            const head = this.renderCommit(commit);
-            const body = commit.expanded ? this.renderFileChangeList(commit) : '';
-            theList.push(<div key={commit.commitSha} className='commitListElement'>{head}{body}</div>);
-        }
-        const commitList = <div className='commitList'>{...theList}</div>;
-        return <div className='listContainer' id={this.scrollContainer}>{commitList}</div>;
+    protected renderCommitList(): React.ReactNode {
+        console.log('renderCommitList', this.gitNodes);
+        return <div className='listContainer' id={this.scrollContainer}>
+            <AutoSizer>
+                {
+                    ({ width, height }) => <List
+                        className='commitList'
+                        ref={list => this.list = (list || undefined)}
+                        width={width}
+                        height={height}
+                        rowRenderer={this.renderCommitRow}
+                        rowCount={this.commits.length}
+                        rowHeight={45}
+                        tabIndex={-1}
+                    />
+                }
+            </AutoSizer>
+        </div>;
     }
 
     protected renderCommit(commit: GitCommitNode): React.ReactNode {
         this.gitNodes.push(commit);
+        console.log('renderCommit', this.gitNodes);
         let expansionToggleIcon = 'caret-right';
         if (commit && commit.expanded) {
             expansionToggleIcon = 'caret-down';
@@ -269,6 +297,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
                         }
                         this.update();
                     } else {
+                        console.log('onClick in commit', this.gitNodes);
                         this.selectNode(commit);
                     }
                 }
@@ -316,6 +345,8 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         const fileChanges = commit.fileChangeNodes;
 
         this.gitNodes.push(...fileChanges);
+
+        console.log('renderFileChangeList', this.gitNodes);
 
         const files: React.ReactNode[] = [];
 

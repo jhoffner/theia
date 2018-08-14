@@ -97,6 +97,14 @@
     font-size: smaller;
 }
 
+.theia-git .git-diff-container .listContainer {
+    flex: 1;
+}
+
+.theia-git .git-diff-container .listContainer .commitList {
+    height: 100%;
+}
+
 .theia-git .git-diff-container .history-lazy-loading {
     position: absolute;
     height: 50px;

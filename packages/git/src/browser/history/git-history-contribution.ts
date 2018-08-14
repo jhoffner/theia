@@ -35,7 +35,7 @@ export namespace GitHistoryCommands {
 }
 
 export const GIT_HISTORY = 'git-history';
-export const GIT_HISTORY_MAX_COUNT = 100;
+export const GIT_HISTORY_MAX_COUNT = undefined;
 @injectable()
 export class GitHistoryContribution extends AbstractViewContribution<GitHistoryWidget> {
 
