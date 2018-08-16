@@ -30,7 +30,8 @@ import { GitCommitDetails } from './git-commit-detail-widget';
 import { GitNavigableListWidget } from '../git-navigable-list-widget';
 import { GitFileChangeNode } from '../git-widget';
 import * as React from 'react';
-import { AutoSizer, List, ListRowRenderer } from 'react-virtualized';
+import { AutoSizer, List, ListRowRenderer, ListRowProps } from 'react-virtualized';
+import { Component } from 'react';
 
 export interface GitCommitNode extends GitCommitDetails {
     fileChanges?: GitFileChange[];
@@ -74,37 +75,14 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         this.scrollOptions = undefined;
     }
 
-    /*
-    protected onAfterAttach(msg: Message) {
-    super.onAfterAttach(msg);
-    (async () => {
-        const sc = await this.getScrollContainer();
-        const listener = (e: UIEvent) => {
-            const el = (e.srcElement || e.target) as HTMLElement;
-            if (el.scrollTop + el.clientHeight > el.scrollHeight - 83) {
-                const ll = this.node.getElementsByClassName('history-lazy-loading')[0];
-                ll.className = 'history-lazy-loading show';
-                this.addCommits({
-                    range: {
-                        toRevision: this.commits[this.commits.length - 1].commitSha
-                    },
-                    maxCount: GIT_HISTORY_MAX_COUNT,
-                    uri: this.options.uri
-                });
-            }
-        };
-        sc.addEventListener('scroll', listener);
-        this.toDispose.push(Disposable.create(() => {
-            sc.removeEventListener('scroll', listener);
-        }));
-    })();
-    }
-    */
-
     update() {
+        const sel = this.indexOfSelected;
         this.gitNodes = [];
         if (this.list) {
             this.list.forceUpdateGrid();
+            if (sel !== -1) {
+                this.list.recomputeRowHeights(sel);
+            }
         }
         super.update();
     }
@@ -118,7 +96,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
             this.singleFileMode = !!fileStat && !fileStat.isDirectory;
         }
         this.addCommits(options);
-        this.update();
+        // this.update();
     }
 
     protected addCommits(options?: Git.Options.Log) {
@@ -203,23 +181,15 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
     protected onDataReady(): void {
         this.ready = true;
         this.update();
-        const ll = this.node.getElementsByClassName('history-lazy-loading')[0];
-        if (ll && ll.className === 'history-lazy-loading show') {
-            ll.className = 'history-lazy-loading hide';
-        }
     }
 
     protected render(): React.ReactNode {
-        console.log('render', this.gitNodes);
         return <div className='git-diff-container'>
             {
                 this.ready ?
                     < React.Fragment >
                         {this.renderHistoryHeader()}
                         {this.renderCommitList()}
-                        <div className='history-lazy-loading'>
-                            <span className='fa fa-spinner fa-pulse fa-2x fa-fw'></span>
-                        </div>
                     </React.Fragment>
                     :
                     <div className='spinnerContainer'>
@@ -259,8 +229,19 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         return <div key={key} style={style} className='commitListElement'>{head}{body}</div>;
     }
 
+    protected readonly calcRowHeight = (options: ListRowProps) => this.doCalcRowHeight(options);
+    protected doCalcRowHeight(options: ListRowProps) {
+        const commit = this.commits[options.index];
+        const defaultHeight = 45;
+        console.log(options.index);
+        if (commit.expanded) {
+            const mult = commit.fileChangeNodes ? commit.fileChangeNodes.length : 0;
+            return defaultHeight + (mult * 20) + 10;
+        }
+        return defaultHeight;
+    }
+
     protected renderCommitList(): React.ReactNode {
-        console.log('renderCommitList', this.gitNodes);
         return <div className='listContainer' id={this.scrollContainer}>
             <AutoSizer>
                 {
@@ -271,7 +252,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
                         height={height}
                         rowRenderer={this.renderCommitRow}
                         rowCount={this.commits.length}
-                        rowHeight={45}
+                        rowHeight={this.calcRowHeight}
                         tabIndex={-1}
                     />
                 }
@@ -281,7 +262,6 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
 
     protected renderCommit(commit: GitCommitNode): React.ReactNode {
         this.gitNodes.push(commit);
-        console.log('renderCommit', this.gitNodes);
         let expansionToggleIcon = 'caret-right';
         if (commit && commit.expanded) {
             expansionToggleIcon = 'caret-down';
@@ -289,7 +269,7 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         return <div
             className={`containerHead${commit.selected ? ' ' + SELECTED_CLASS : ''}`}
             onClick={
-                () => {
+                e => {
                     if (commit.selected && !this.singleFileMode) {
                         commit.expanded = !commit.expanded;
                         if (commit.expanded) {
@@ -297,16 +277,17 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
                         }
                         this.update();
                     } else {
-                        console.log('onClick in commit', this.gitNodes);
                         this.selectNode(commit);
                     }
+                    e.preventDefault();
                 }
             }
             onDoubleClick={
-                () => {
+                e => {
                     if (this.singleFileMode && commit.fileChanges && commit.fileChanges.length > 0) {
                         this.openFile(commit.fileChanges[0], commit.commitSha);
                     }
+                    e.preventDefault();
                 }
             }>
             <div className='headContent'><div className='image-container'>
@@ -345,8 +326,6 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         const fileChanges = commit.fileChangeNodes;
 
         this.gitNodes.push(...fileChanges);
-
-        console.log('renderFileChangeList', this.gitNodes);
 
         const files: React.ReactNode[] = [];
 
@@ -450,3 +429,4 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
         open(this.openerService, uriToOpen, { mode: 'reveal' });
     }
 }
+
