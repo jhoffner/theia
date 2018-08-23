@@ -19,7 +19,11 @@
 }
 
 .theia-git .commitListElement {
-    border-bottom: 1px solid var(--theia-layout-color4);
+    border-top: 1px solid var(--theia-layout-color4);
+}
+
+.theia-git .commitListElement.first {
+    border: none;
 }
 
 .theia-git .commitListElement .containerHead {
