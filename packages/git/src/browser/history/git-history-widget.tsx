@@ -20,7 +20,7 @@ import { OpenerService, open, StatefulWidget, SELECTED_CLASS, WidgetManager, App
 import { GIT_RESOURCE_SCHEME } from '../git-resource';
 import URI from '@theia/core/lib/common/uri';
 import { CancellationTokenSource } from '@theia/core/lib/common/cancellation';
-import { GIT_HISTORY } from './git-history-contribution';
+import { GIT_HISTORY, GIT_HISTORY_MAX_COUNT } from './git-history-contribution';
 import { GitFileStatus, Git, GitFileChange } from '../../common';
 import { FileSystem } from '@theia/filesystem/lib/common';
 import { GitDiffContribution } from '../diff/git-diff-contribution';
@@ -41,7 +41,7 @@ export interface GitCommitNode extends GitCommitDetails {
 
 export namespace GitCommitNode {
     export function is(node: any): node is GitCommitNode {
-        return 'commitSha' in node && 'commitMessage' in node && 'fileChangeNodes' in node;
+        return !!node && 'commitSha' in node && 'commitMessage' in node && 'fileChangeNodes' in node;
     }
 }
 
@@ -97,11 +97,14 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
             const fileStat = await this.fileSystem.getFileStat(options.uri);
             this.singleFileMode = !!fileStat && !fileStat.isDirectory;
         }
-        this.addCommits(options);
+        await this.addCommits(options);
+        this.onDataReady();
     }
 
-    protected addCommits(options?: Git.Options.Log) {
+    protected async addCommits(options?: Git.Options.Log): Promise<any> {
         const repository = this.repositoryProvider.selectedRepository;
+        let resolver: () => void;
+
         this.cancelIndicator.cancel();
         this.cancelIndicator = new CancellationTokenSource();
         const token = this.cancelIndicator.token;
@@ -136,12 +139,16 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
                     }
                     this.commits.push(...commits);
                 }
-                this.onDataReady();
+                console.log(this.gitNodes.length);
+                resolver();
             });
         } else {
-            this.commits = [];
-            this.onDataReady();
+            setTimeout(() => {
+                this.commits = [];
+                resolver();
+            });
         }
+        return new Promise(resolve => resolver = resolve);
     }
 
     protected async addOrRemoveFileChangeNodes(commit: GitCommitNode) {
@@ -246,17 +253,22 @@ export class GitHistoryWidget extends GitNavigableListWidget<GitHistoryListNode>
     protected readonly loadMoreRows = (params: IndexRange) => this.doLoadMoreRows(params);
     protected doLoadMoreRows(params: IndexRange): Promise<any> {
         let resolver: () => void;
-        /*
-        ok, hier muss nun also die liste die ich an die list component übergebe aktualisiert werden.
-        wäre also wieder wie vorher in addCommits commits added.
-        Problem ist nur wie sich die component verhält wenn ich die liste dynamisch manipuliere
-        also filechanges hinzufüge.
-         */
-        setTimeout(() => {
-            resolver();
-        }, 1000);
+        const promise = new Promise(resolve => resolver = resolve);
 
-        return new Promise(resolve => resolver = resolve);
+        const lastRow = this.gitNodes[params.stopIndex - 1];
+        if (GitCommitNode.is(lastRow)) {
+            const toRevision = lastRow.commitSha;
+            this.addCommits({
+                range: { toRevision },
+                maxCount: GIT_HISTORY_MAX_COUNT,
+                uri: this.options.uri
+            }).then(() => {
+                this.onDataReady();
+                console.log('after adding nodes', this.gitNodes);
+                resolver();
+            });
+        }
+        return promise;
     }
 
     protected readonly renderCommit = (commit: GitCommitNode) => this.doRenderCommit(commit);
@@ -432,17 +444,19 @@ export namespace GitHistoryList {
 export class GitHistoryList extends React.Component<GitHistoryList.Props, GitHistoryList.State> {
     list: List | undefined;
 
-    protected isRowLoaded(opts: { index: number }) {
+    protected readonly checkIfRowIsLoaded = (opts: { index: number }) => this.doCheckIfRowIsLoaded(opts);
+    protected doCheckIfRowIsLoaded(opts: { index: number }) {
         const row = this.props.rows[opts.index];
         return !!row;
     }
 
     render(): React.ReactNode {
+        console.log('RENDER');
         return <InfiniteLoader
-            isRowLoaded={this.isRowLoaded}
+            isRowLoaded={this.checkIfRowIsLoaded}
             loadMoreRows={this.props.loadMoreRows}
-            rowCount={100000}
-            threshold={10}
+            rowCount={this.props.rows.length + 1}
+            threshold={30}
         >
             {
                 ({ onRowsRendered, registerChild }) => (
@@ -456,9 +470,10 @@ export class GitHistoryList extends React.Component<GitHistoryList.Props, GitHis
                                 }}
                                 width={width}
                                 height={height}
+                                onRowsRendered={onRowsRendered}
                                 rowRenderer={this.renderRow}
-                                rowCount={this.props.rows.length}
                                 rowHeight={this.calcRowHeight}
+                                rowCount={this.props.rows.length + 1}
                                 tabIndex={-1}
                                 scrollToIndex={this.props.indexOfSelected}
                             />
@@ -476,15 +491,21 @@ export class GitHistoryList extends React.Component<GitHistoryList.Props, GitHis
     }
 
     protected renderRow: ListRowRenderer = ({ index, key, style }) => {
-        const row = this.props.rows[index];
-        if (GitCommitNode.is(row)) {
-            const head = this.props.renderCommit(row);
+        if (this.checkIfRowIsLoaded({ index })) {
+            const row = this.props.rows[index];
+            if (GitCommitNode.is(row)) {
+                const head = this.props.renderCommit(row);
+                return <div key={key} style={style} className={`commitListElement${index === 0 ? ' first' : ''}`} >
+                    {head}
+                </div>;
+            } else if (GitFileChangeNode.is(row)) {
+                return <div key={key} style={style} className='fileChangeListElement'>
+                    {this.props.renderFileChangeList(row)}
+                </div>;
+            }
+        } else {
             return <div key={key} style={style} className={`commitListElement${index === 0 ? ' first' : ''}`} >
-                {head}
-            </div>;
-        } else if (GitFileChangeNode.is(row)) {
-            return <div key={key} style={style} className='fileChangeListElement'>
-                {this.props.renderFileChangeList(row)}
+                <span className='fa fa-spinner fa-pulse fa-fw'></span>
             </div>;
         }
     }
