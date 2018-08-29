@@ -35,7 +35,7 @@ interface StopFn {
 class ActivatedPlugin {
     constructor(public readonly pluginContext: theia.PluginContext,
         public readonly exports?: PluginAPI,
-        public readonly stopFun?: StopFn) {
+        public readonly stopFn?: StopFn) {
     }
 }
 
@@ -49,8 +49,8 @@ export class PluginManagerExtImpl implements PluginManagerExt, PluginManager {
 
     $stopPlugin(contextPath: string): PromiseLike<void> {
         this.activatedPlugins.forEach(plugin => {
-            if (plugin.stopFun) {
-                plugin.stopFun();
+            if (plugin.stopFn) {
+                plugin.stopFn();
             }
 
             // dispose any objects
@@ -63,7 +63,6 @@ export class PluginManagerExtImpl implements PluginManagerExt, PluginManager {
     }
 
     $init(pluginInit: PluginInitData): PromiseLike<void> {
-        // this.init = pluginInit;
         const [plugins, foreignPlugins] = this.host.init(pluginInit.plugins);
         // add foreign plugins
         for (const plugin of foreignPlugins) {
@@ -91,13 +90,13 @@ export class PluginManagerExtImpl implements PluginManagerExt, PluginManager {
             subscriptions: subscriptions
         };
 
-        let stopFun = undefined;
+        let stopFn = undefined;
         if (typeof pluginMain[plugin.lifecycle.stopMethod] === 'function') {
-            stopFun = pluginMain[plugin.lifecycle.stopMethod];
+            stopFn = pluginMain[plugin.lifecycle.stopMethod];
         }
         if (typeof pluginMain[plugin.lifecycle.startMethod] === 'function') {
             const pluginExport = pluginMain[plugin.lifecycle.startMethod].apply(getGlobal(), [pluginContext]);
-            this.activatedPlugins.set(plugin.model.id, new ActivatedPlugin(pluginContext, pluginExport, stopFun));
+            this.activatedPlugins.set(plugin.model.id, new ActivatedPlugin(pluginContext, pluginExport, stopFn));
         } else {
             console.log('there is no doStart method on plugin');
         }
