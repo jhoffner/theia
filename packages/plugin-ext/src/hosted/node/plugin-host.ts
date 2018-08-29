@@ -79,7 +79,7 @@ const pluginManager = new PluginManagerExtImpl({
                     initPath: backendInitPath,
                     model: pluginModel,
                     lifecycle: pluginLifecycle,
-                    rowModel: plg.source
+                    rawModel: plg.source
                 };
                 result.push(plugin);
             } else {
@@ -88,7 +88,7 @@ const pluginManager = new PluginManagerExtImpl({
                     initPath: pluginLifecycle.frontendInitPath!,
                     model: pluginModel,
                     lifecycle: pluginLifecycle,
-                    rowModel: plg.source
+                    rawModel: plg.source
                 });
             }
         }

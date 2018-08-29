@@ -40,7 +40,7 @@ export interface Plugin {
     pluginPath: string;
     initPath: string;
     model: PluginModel;
-    rowModel: PluginPackage;
+    rawModel: PluginPackage;
     lifecycle: PluginLifecycle;
 }
 

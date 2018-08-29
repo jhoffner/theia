@@ -361,7 +361,7 @@ export interface PluginLifecycle {
  * The export function of initialization module of backend plugin.
  */
 export interface BackendInitializationFn {
-    (rpc: RPCProtocol, manger: PluginManager, pluginMetadata: PluginMetadata): void;
+    (rpc: RPCProtocol, manager: PluginManager, pluginMetadata: PluginMetadata): void;
 }
 
 export interface BackendLoadingFn {

@@ -14,9 +14,9 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { BackendInitializationFn, createAPI, PluginMetadata } from '@theia/plugin-ext';
+import { BackendInitializationFn, createAPI, PluginMetadata, PluginManager } from '@theia/plugin-ext';
 
-export const doInitialization: BackendInitializationFn = (rpc: any, manager: any, pluginMetadata: PluginMetadata) => {
+export const doInitialization: BackendInitializationFn = (rpc: any, manager: PluginManager, pluginMetadata: PluginMetadata) => {
     const module = require('module');
     const vscodeModuleName = 'vscode';
     const vscode = createAPI(rpc, manager);

@@ -56,10 +56,10 @@ const pluginManager = new PluginManagerExtImpl({
             return ctx[plugin.lifecycle.frontendModuleName];
         }
     },
-    init(raw: PluginMetadata[]): [Plugin[], Plugin[]] {
+    init(rawPluginData: PluginMetadata[]): [Plugin[], Plugin[]] {
         const result: Plugin[] = [];
         const foreign: Plugin[] = [];
-        for (const plg of raw) {
+        for (const plg of rawPluginData) {
             const pluginModel = plg.model;
             const pluginLifecycle = plg.lifecycle;
             if (pluginModel.entryPoint!.frontend) {
@@ -74,7 +74,7 @@ const pluginManager = new PluginManagerExtImpl({
                     initPath: frontendInitPath,
                     model: pluginModel,
                     lifecycle: pluginLifecycle,
-                    rowModel: plg.source
+                    rawModel: plg.source
                 };
                 result.push(plugin);
             } else {
@@ -83,7 +83,7 @@ const pluginManager = new PluginManagerExtImpl({
                     initPath: pluginLifecycle.backendInitPath!,
                     model: pluginModel,
                     lifecycle: pluginLifecycle,
-                    rowModel: plg.source
+                    rawModel: plg.source
                 });
             }
         }

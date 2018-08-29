@@ -18,7 +18,7 @@ import { CommandRegistryImpl } from './command-registry';
 import { Emitter } from '@theia/core/lib/common/event';
 import { CancellationTokenSource } from '@theia/core/lib/common/cancellation';
 import { QuickOpenExtImpl } from './quick-open';
-import { MAIN_RPC_CONTEXT, Plugin as PPlugin, PluginManager } from '../api/plugin-api';
+import { MAIN_RPC_CONTEXT, Plugin as InternalPlugin, PluginManager } from '../api/plugin-api';
 import { RPCProtocol } from '../api/rpc-protocol';
 import { MessageRegistryExt } from './message-registry';
 import { StatusBarMessageRegistryExt } from './status-bar-message-registry';
@@ -339,10 +339,10 @@ class Plugin<T> implements theia.Plugin<T> {
     isActive: boolean;
     packageJSON: any;
     pluginType: theia.PluginType;
-    constructor(private readonly pluginManager: PluginManager, plugin: PPlugin) {
+    constructor(private readonly pluginManager: PluginManager, plugin: InternalPlugin) {
         this.id = plugin.model.id;
-        this.pluginPath = plugin.rowModel.packagePath;
-        this.packageJSON = plugin.rowModel;
+        this.pluginPath = plugin.rawModel.packagePath;
+        this.packageJSON = plugin.rawModel;
         this.isActive = true;
         this.pluginType = plugin.model.entryPoint.frontend ? 'frontend' : 'backend';
     }

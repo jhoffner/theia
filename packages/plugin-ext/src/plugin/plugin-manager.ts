@@ -28,14 +28,14 @@ export interface PluginHost {
     init(data: PluginMetadata[]): [Plugin[], Plugin[]];
 }
 
-interface StopFun {
+interface StopFn {
     (): void;
 }
 
 class ActivatedPlugin {
     constructor(public readonly pluginContext: theia.PluginContext,
         public readonly exports?: PluginAPI,
-        public readonly stopFun?: StopFun) {
+        public readonly stopFun?: StopFn) {
     }
 }
 
