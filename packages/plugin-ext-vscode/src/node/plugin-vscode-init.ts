@@ -16,10 +16,10 @@
 
 import { BackendInitializationFn, createAPI, PluginMetadata } from '@theia/plugin-ext';
 
-export const doInitialization: BackendInitializationFn = (rpc: any, pluginMetadata: PluginMetadata) => {
+export const doInitialization: BackendInitializationFn = (rpc: any, manager: any, pluginMetadata: PluginMetadata) => {
     const module = require('module');
     const vscodeModuleName = 'vscode';
-    const vscode = createAPI(rpc);
+    const vscode = createAPI(rpc, manager);
 
     // register the commands that are in the package.json file
     const contributes: any = pluginMetadata.source.contributes;
@@ -34,6 +34,16 @@ export const doInitialization: BackendInitializationFn = (rpc: any, pluginMetada
         // use of the ID when registering commands
         if (typeof command === 'string' && handler) {
             return vscode.commands.registerHandler(command, handler);
+        }
+    };
+
+    // use Theia plugin api instead vscode extensions
+    (<any>vscode).extensions = {
+        get all(): any[] {
+            return vscode.plugins.all;
+        },
+        getExtension(pluginId: string): any | undefined {
+            return vscode.plugins.getPlugin(pluginId);
         }
     };
 

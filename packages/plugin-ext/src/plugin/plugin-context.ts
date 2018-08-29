@@ -18,9 +18,8 @@ import { CommandRegistryImpl } from './command-registry';
 import { Emitter } from '@theia/core/lib/common/event';
 import { CancellationTokenSource } from '@theia/core/lib/common/cancellation';
 import { QuickOpenExtImpl } from './quick-open';
-import { MAIN_RPC_CONTEXT, Plugin } from '../api/plugin-api';
+import { MAIN_RPC_CONTEXT, Plugin as PPlugin, PluginManager } from '../api/plugin-api';
 import { RPCProtocol } from '../api/rpc-protocol';
-import { getPluginId } from '../common/plugin-protocol';
 import { MessageRegistryExt } from './message-registry';
 import { StatusBarMessageRegistryExt } from './status-bar-message-registry';
 import { WindowStateExtImpl } from './window-state';
@@ -65,7 +64,7 @@ import { LanguagesExtImpl, score } from './languages';
 import { fromDocumentSelector } from './type-converters';
 import { DialogsExtImpl } from './dialogs';
 
-export function createAPI(rpc: RPCProtocol): typeof theia {
+export function createAPI(rpc: RPCProtocol, pluginManager: PluginManager): typeof theia {
     const commandRegistryExt = rpc.set(MAIN_RPC_CONTEXT.COMMAND_REGISTRY_EXT, new CommandRegistryImpl(rpc));
     const quickOpenExt = rpc.set(MAIN_RPC_CONTEXT.QUICK_OPEN_EXT, new QuickOpenExtImpl(rpc));
     const dialogsExt = new DialogsExtImpl(rpc);
@@ -282,6 +281,19 @@ export function createAPI(rpc: RPCProtocol): typeof theia {
         },
     };
 
+    const plugins: typeof theia.plugins = {
+        get all(): theia.Plugin<any>[] {
+            return pluginManager.getAllPlugins().map(plg => new Plugin(pluginManager, plg));
+        },
+        getPlugin(pluginId: string): theia.Plugin<any> | undefined {
+            const plugin = pluginManager.getPluginById(pluginId);
+            if (plugin) {
+                return new Plugin(pluginManager, plugin);
+            }
+            return undefined;
+        }
+    };
+
     return <typeof theia>{
         version: require('../../package.json').version,
         commands,
@@ -289,6 +301,7 @@ export function createAPI(rpc: RPCProtocol): typeof theia {
         workspace,
         env,
         languages,
+        plugins,
         // Types
         StatusBarAlignment: StatusBarAlignment,
         Disposable: Disposable,
@@ -320,34 +333,24 @@ export function createAPI(rpc: RPCProtocol): typeof theia {
     };
 }
 
-// tslint:disable-next-line:no-any
-export function startPlugin(plugin: Plugin, pluginMain: any, plugins: Map<string, any>): void {
-
-    const pluginId = getPluginId(plugin.model);
-    const pluginData: any = {};
-
-    // Create pluginContext object for this plugin.
-    const subscriptions: theia.Disposable[] = [];
-    const pluginContext: theia.PluginContext = {
-        subscriptions: subscriptions
-    };
-    pluginData.pluginContext = pluginContext;
-
-    if (typeof pluginMain[plugin.lifecycle.startMethod] === 'function') {
-        pluginMain[plugin.lifecycle.startMethod].apply(getGlobal(), [pluginContext]);
-    } else {
-        console.log('There is no start method on plugin');
+class Plugin<T> implements theia.Plugin<T> {
+    id: string;
+    pluginPath: string;
+    isActive: boolean;
+    packageJSON: any;
+    pluginType: theia.PluginType;
+    constructor(private readonly pluginManager: PluginManager, plugin: PPlugin) {
+        this.id = plugin.model.id;
+        this.pluginPath = plugin.rowModel.packagePath;
+        this.packageJSON = plugin.rowModel;
+        this.isActive = true;
+        this.pluginType = plugin.model.entryPoint.frontend ? 'frontend' : 'backend';
     }
 
-    if (typeof pluginMain[plugin.lifecycle.stopMethod] === 'function') {
-        pluginData.stopMethod = pluginMain[plugin.lifecycle.stopMethod];
+    get exports(): T {
+        return <T>this.pluginManager.getPluginExport(this.id);
     }
-
-    plugins.set(pluginId, pluginData);
-}
-
-// for electron
-function getGlobal() {
-    // tslint:disable-next-line:no-null-keyword
-    return typeof self === 'undefined' ? typeof global === 'undefined' ? null : global : self;
+    activate(): PromiseLike<T> {
+        throw new Error('Method not implemented.');
+    }
 }
